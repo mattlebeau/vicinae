@@ -21,6 +21,7 @@ DictationSession::DictationSession(ServiceRegistry &services, TranscriptionSetup
   connect(&m_session, &TranscriptionSession::audioLevelChanged, this, &DictationSession::audioLevelChanged);
   connect(&m_session, &TranscriptionSession::elapsedTimeChanged, this, &DictationSession::elapsedTimeChanged);
   connect(&m_session, &TranscriptionSession::stateChanged, this, &DictationSession::stateChanged);
+  connect(&m_session, &TranscriptionSession::liveTextChanged, this, &DictationSession::liveTextChanged);
   connect(&m_session, &TranscriptionSession::transcribed, this, &DictationSession::handleTranscript);
   connect(&m_session, &TranscriptionSession::failed, this, &DictationSession::finishWithMessage);
   connect(&m_session, &TranscriptionSession::cancelled, this, &DictationSession::finish);

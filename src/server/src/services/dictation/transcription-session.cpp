@@ -54,9 +54,21 @@ bool TranscriptionSession::start(TranscriptionSetup setup) {
   m_captureReady = false;
   m_durationMs = 0;
 
+  m_liveCommitted.clear();
+  m_liveTentative.clear();
+  m_liveAudio.clear();
+  m_recorder.setCaptureObserver(nullptr);
+
   if (!m_recorder.start()) {
     fail(tr("Could not start recording"));
     return false;
+  }
+
+  if (m_setup.liveModel) {
+    m_liveResampler =
+        std::make_unique<Audio::StreamingResampler>(m_recorder.captureSampleRate(), AI::AbstractLiveTranscriber::SAMPLE_RATE);
+    m_recorder.setCaptureObserver([this](std::span<const float> captured) { feedLive(captured); });
+    startLive(true);
   }
 
   if (m_setup.pauseMedia) {
@@ -84,6 +96,7 @@ void TranscriptionSession::cancel() {
   m_elapsedTimer.stop();
   m_recordingLimit.stop();
   m_recorder.discard();
+  stopLive();
   m_pauseHandle.reset();
   m_dictation.ai().cancelPreload(m_setup.model);
   emit stateChanged();
@@ -98,6 +111,8 @@ void TranscriptionSession::accept() {
   m_durationMs = m_recorder.elapsedMs();
   m_transcribeTimer.start();
   m_recorder.stop();
+  // the preview has served its purpose, and must not compete with the final transcription
+  stopLive();
 
   if (m_setup.playSoundEffects) {
     m_startSound.stop();
@@ -176,7 +191,61 @@ void TranscriptionSession::fail(const QString &message) {
   m_elapsedTimer.stop();
   m_recordingLimit.stop();
   if (m_recorder.state() != Audio::Recorder::State::Idle) m_recorder.discard();
+  stopLive();
   m_pauseHandle.reset();
   emit stateChanged();
   emit failed(message);
+}
+
+void TranscriptionSession::startLive(bool allowStreaming) {
+  AI::LiveTranscriptionOptions options{.language = m_setup.options.language};
+  for (const auto word : m_dictation.vocabulary()->words()) {
+    options.vocabulary.emplace_back(word);
+  }
+  options.vocabulary.insert(options.vocabulary.end(), m_setup.extraVocabulary.begin(), m_setup.extraVocabulary.end());
+
+  m_live = m_dictation.ai().createLiveTranscriber(*m_setup.liveModel, std::move(options), allowStreaming);
+  if (!m_live) {
+    qWarning() << "Dictation: no live transcription for" << QString::fromStdString(m_setup.liveModel->provider);
+    return;
+  }
+  m_liveStreaming = allowStreaming;
+
+  connect(m_live.get(), &AI::AbstractLiveTranscriber::textChanged, this, [this] {
+    m_liveCommitted = m_live->committedText();
+    m_liveTentative = m_live->tentativeText();
+    emit liveTextChanged();
+  });
+  connect(m_live.get(), &AI::AbstractLiveTranscriber::failed, this, [this](const QString &reason) {
+    qWarning() << "Dictation: live transcription failed:" << reason;
+    const bool nothingYet = m_liveCommitted.isEmpty() && m_liveTentative.isEmpty();
+    if (m_liveStreaming && nothingYet && isRecording()) {
+      // the streaming endpoint is unusable: transcribe in chunks instead, from the start of the recording
+      qInfo() << "Dictation: falling back to chunked live transcription";
+      m_live.release()->deleteLater();
+      startLive(false);
+      if (m_live) m_live->appendAudio(m_liveAudio);
+    }
+  });
+}
+
+void TranscriptionSession::stopLive() {
+  m_recorder.setCaptureObserver(nullptr);
+  if (m_live) {
+    m_live->stop();
+    m_live->disconnect(this);
+    // the failure handler may be running on it
+    m_live.release()->deleteLater();
+  }
+  m_liveResampler.reset();
+  m_liveAudio.clear();
+  m_liveAudio.shrink_to_fit();
+}
+
+void TranscriptionSession::feedLive(std::span<const float> captured) {
+  if (!m_liveResampler) return;
+  const auto samples = m_liveResampler->push(captured);
+  if (samples.empty()) return;
+  m_liveAudio.insert(m_liveAudio.end(), samples.begin(), samples.end());
+  if (m_live) m_live->appendAudio(samples);
 }

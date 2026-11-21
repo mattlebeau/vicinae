@@ -1,4 +1,5 @@
 #include "local-provider.hpp"
+#include <format>
 #include "services/ai/ai-provider-types.hpp"
 #include <chrono>
 #include <string>
@@ -160,6 +161,11 @@ QFuture<TranscriptionResult> LocalProvider::transcribe(Audio::Recording recordin
       prompt += word;
     }
     request.initialPrompt = std::move(prompt);
+  }
+  if (model->info.engine == LocalEngine::Whisper && opts.context) {
+    // whisper reads its prompt as the text that came right before the audio
+    request.initialPrompt =
+        request.initialPrompt ? std::format("{}. {}", *request.initialPrompt, *opts.context) : *opts.context;
   }
 
   return m_inference.transcribe(recording, request);

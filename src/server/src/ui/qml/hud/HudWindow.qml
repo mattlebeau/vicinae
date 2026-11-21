@@ -18,23 +18,37 @@ Window {
     readonly property bool captureReady: recording && Hud.dictation.captureReady
     readonly property color mutedColor: Config.withAlpha(Theme.foreground, 0.6)
 
+    // The dictation HUD scales as a whole, notices keep their size.
+    readonly property real s: dictating ? Math.max(1, Hud.scale) : 1
+    readonly property bool live: dictating && Hud.dictation.livePreview
+    readonly property real barHeight: 42 * s
+    readonly property int liveLines: 3
+    readonly property real liveTextHeight: liveMetrics.height * liveLines
+    readonly property real livePadding: 12 * s
+    readonly property real liveAreaHeight: live ? liveTextHeight + livePadding : 0
+    // a large scale never makes the HUD wider than the screen it is on
+    readonly property real maxWidth: screen && screen.width > 0 ? screen.width - 48 : Number.MAX_VALUE
+    readonly property real liveWidth: Math.min(520 * s, maxWidth)
+    // Wide enough for every dictation state, so the window never resizes while the pill animates.
+    readonly property real dictationWindowWidth: Math.min(live ? liveWidth : 360 * s, maxWidth)
+
     property color pillColor: Config.withAlpha(Theme.background, busy ? 0.98 : 0.9)
     property color pillBorderColor: Config.withAlpha(Theme.foreground, Theme.isDark ? 0.12 : 0.18)
     property int pillBorderWidth: 1
-    property real pillRadius: height / 2
-    property real pillWidth: busy ? (showsMessage ? Math.max(216, Math.min(360, messageLabel.implicitWidth + 72)) : working ? Math.max(216, Math.min(360, workLabel.implicitWidth + 88)) : 172) : noticeRow.width + 30
+    property real pillRadius: live ? 16 * s : height / 2
+    property real pillWidth: busy ? Math.min(maxWidth, live ? liveWidth : showsMessage ? Math.max(216 * s, Math.min(360 * s, messageLabel.implicitWidth + 72 * s)) : working ? Math.max(216 * s, Math.min(360 * s, workLabel.implicitWidth + 88 * s)) : 172 * s) : noticeRow.width + 30
 
     signal shown
 
     width: pillWidth
-    height: busy ? 42 : noticeRow.height + 20
+    height: busy ? barHeight + liveAreaHeight : noticeRow.height + 20
     title: dictating ? qsTr("Dictation") : hasActivity ? Hud.activity.text : Hud.text
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.ToolTip | Qt.WindowDoesNotAcceptFocus
     color: "transparent"
     visible: false
 
     Behavior on pillWidth {
-        enabled: root.visible && root.busy && !root.showsMessage
+        enabled: root.visible && root.busy && !root.showsMessage && !root.live
         NumberAnimation {
             duration: 320
             easing.type: Easing.OutCubic
@@ -60,6 +74,16 @@ Window {
 
     Component.onCompleted: Hud.registerWindow(root)
 
+    FontMetrics {
+        id: liveMetrics
+        font.family: Theme.fontFamily
+        font.pointSize: Theme.regularFontSize * root.s
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
     component HudButton: Item {
         id: button
         property var icon
@@ -68,8 +92,8 @@ Window {
         readonly property bool hovered: mouse.containsMouse
         signal clicked
 
-        implicitWidth: 28
-        implicitHeight: 28
+        implicitWidth: 28 * root.s
+        implicitHeight: 28 * root.s
         Accessible.role: Accessible.Button
         Accessible.name: label
         Accessible.onPressAction: if (enabled)
@@ -77,8 +101,8 @@ Window {
 
         Rectangle {
             anchors.centerIn: parent
-            width: 22
-            height: 22
+            width: 22 * root.s
+            height: 22 * root.s
             radius: width / 2
             color: Config.withAlpha(button.hovered ? Theme.accent : Theme.foreground, button.hovered ? 0.18 : 0.08)
             opacity: button.status && !button.hovered ? 0 : 1
@@ -104,10 +128,10 @@ Window {
         ViciImage {
             anchors.centerIn: parent
             visible: !button.status
-            width: 11
-            height: 11
+            width: 11 * root.s
+            height: 11 * root.s
             source: button.icon
-            sourceSize: Qt.size(11, 11)
+            sourceSize: Qt.size(Math.ceil(11 * root.s), Math.ceil(11 * root.s))
         }
 
         MouseArea {
@@ -160,13 +184,17 @@ Window {
         }
 
         Item {
-            anchors.fill: parent
+            id: bar
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: root.barHeight
             visible: root.busy
 
             HudButton {
                 id: finishButton
                 anchors.left: parent.left
-                anchors.leftMargin: 6
+                anchors.leftMargin: 6 * root.s
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.recording
                 enabled: root.dictating && Hud.dictation.showControls
@@ -177,9 +205,9 @@ Window {
 
                 Rectangle {
                     anchors.centerIn: parent
-                    width: 7
-                    height: 7
-                    radius: finishButton.hovered ? 2 : width / 2
+                    width: 7 * root.s
+                    height: 7 * root.s
+                    radius: finishButton.hovered ? 2 * root.s : width / 2
                     color: root.captureReady ? Theme.accent : root.mutedColor
                     opacity: root.captureReady ? 1 : 0.45
                     Behavior on radius {
@@ -191,8 +219,8 @@ Window {
                     Rectangle {
                         id: pulseHalo
                         anchors.centerIn: parent
-                        width: 7
-                        height: 7
+                        width: 7 * root.s
+                        height: 7 * root.s
                         radius: width / 2
                         color: "transparent"
                         border.color: Theme.accent
@@ -225,11 +253,11 @@ Window {
 
             ViciSpinner {
                 anchors.left: parent.left
-                anchors.leftMargin: 14
+                anchors.leftMargin: 14 * root.s
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.working
-                width: 13
-                height: 13
+                width: 13 * root.s
+                height: 13 * root.s
                 color: Theme.accent
             }
 
@@ -239,17 +267,20 @@ Window {
                 active: root.visible && root.recording
                 ready: root.captureReady
                 level: root.captureReady ? Hud.dictation.audioLevel : 0
+                barWidth: Math.round(4 * root.s)
+                maxHeight: Math.round(18 * root.s)
+                spacing: Math.round(3 * root.s)
             }
 
             Text {
                 id: workLabel
                 anchors.centerIn: parent
-                width: Math.min(implicitWidth, 272)
+                width: Math.min(implicitWidth, 272 * root.s)
                 visible: root.working
                 text: root.hasActivity ? Hud.activity.text : root.dictating && Hud.dictation.rewriting ? qsTr("Rewriting") : qsTr("Transcribing")
                 color: root.mutedColor
                 font.family: Theme.fontFamily
-                font.pointSize: Theme.smallerFontSize
+                font.pointSize: Theme.smallerFontSize * root.s
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
                 Accessible.role: Accessible.StaticText
@@ -259,15 +290,15 @@ Window {
             Text {
                 id: messageLabel
                 anchors.left: parent.left
-                anchors.leftMargin: 18
+                anchors.leftMargin: 18 * root.s
                 anchors.right: cancelButton.left
-                anchors.rightMargin: 6
+                anchors.rightMargin: 6 * root.s
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.showsMessage
                 text: root.hasActivity ? Hud.activity.message : root.dictating ? Hud.dictation.message : ""
                 color: Theme.foreground
                 font.family: Theme.fontFamily
-                font.pointSize: Theme.smallerFontSize
+                font.pointSize: Theme.smallerFontSize * root.s
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
                 Accessible.role: Accessible.StaticText
@@ -277,7 +308,7 @@ Window {
             HudButton {
                 id: cancelButton
                 anchors.right: parent.right
-                anchors.rightMargin: 6
+                anchors.rightMargin: 6 * root.s
                 anchors.verticalCenter: parent.verticalCenter
                 label: root.showsMessage ? qsTr("Dismiss") : root.hasActivity ? qsTr("Cancel") : qsTr("Cancel dictation")
                 icon: Img.icon(BuiltinIcon.Xmark).withFillColor(hovered ? Theme.foreground : root.mutedColor)
@@ -287,6 +318,58 @@ Window {
                     else if (Hud.dictation)
                         Hud.dictation.cancel();
                 }
+            }
+        }
+
+        Rectangle {
+            anchors.top: bar.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: 16 * root.s
+            anchors.rightMargin: 16 * root.s
+            height: 1
+            visible: root.live
+            color: Config.withAlpha(Theme.foreground, 0.08)
+        }
+
+        Flickable {
+            id: liveArea
+            anchors.top: bar.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.topMargin: root.livePadding / 3
+            anchors.leftMargin: 18 * root.s
+            anchors.rightMargin: 18 * root.s
+            height: root.liveTextHeight
+            visible: root.live
+            clip: true
+            interactive: false
+            contentWidth: width
+            contentHeight: liveText.implicitHeight
+            // the newest words stay in view
+            contentY: Math.max(0, contentHeight - height)
+
+            Behavior on contentY {
+                NumberAnimation {
+                    duration: 160
+                    easing.type: Easing.OutQuad
+                }
+            }
+
+            Text {
+                id: liveText
+                readonly property string committed: root.live ? Hud.dictation.liveCommitted : ""
+                readonly property string tentative: root.live ? Hud.dictation.liveTentative : ""
+                readonly property bool empty: committed === "" && tentative === ""
+
+                width: liveArea.width
+                wrapMode: Text.Wrap
+                textFormat: Text.StyledText
+                color: Theme.foreground
+                font: liveMetrics.font
+                text: empty ? "<font color=\"" + root.mutedColor + "\">" + (root.working ? qsTr("Transcribing…") : qsTr("Listening…")) + "</font>" : root.escapeHtml(committed) + (committed !== "" && tentative !== "" ? " " : "") + "<font color=\"" + root.mutedColor + "\">" + root.escapeHtml(tentative) + "</font>"
+                Accessible.role: Accessible.StaticText
+                Accessible.name: committed + " " + tentative
             }
         }
     }

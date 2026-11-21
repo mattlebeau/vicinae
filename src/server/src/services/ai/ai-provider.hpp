@@ -9,6 +9,7 @@
 #include <glaze/core/common.hpp>
 #include <glaze/core/reflect.hpp>
 #include <glaze/json/generic.hpp>
+#include <memory>
 #include <optional>
 #include <qdir.h>
 #include <qfuture.h>
@@ -28,6 +29,9 @@
 #include "ui/image/image-url.hpp"
 
 namespace AI {
+
+class AbstractLiveTranscriber;
+struct LiveTranscriptionOptions;
 
 template <typename T> using Result = std::expected<T, std::string>;
 
@@ -225,6 +229,10 @@ struct TranscriptionOptions {
   // Some class of models (such as parakeet models) cannot be
   // biased. Non-owning: only valid for the duration of the call.
   std::span<const std::string_view> vocabulary;
+
+  // What was said right before this audio, to keep wording and punctuation consistent when a recording
+  // is transcribed in pieces.
+  std::optional<std::string> context;
 };
 
 struct TranscriptionResponse {
@@ -371,6 +379,13 @@ public:
 
   virtual QFuture<TranscriptionResult> transcribe(Audio::Recording recording,
                                                   const TranscriptionOptions &opts = {}) = 0;
+
+  /**
+   * A transcriber that streams audio to the provider as it is recorded, for providers with a native
+   * streaming API. Null means the caller should fall back to transcribing the recording in pieces.
+   */
+  virtual std::unique_ptr<AbstractLiveTranscriber> createLiveTranscriber(std::string_view modelId,
+                                                                         const LiveTranscriptionOptions &opts);
 };
 
 }; // namespace AI

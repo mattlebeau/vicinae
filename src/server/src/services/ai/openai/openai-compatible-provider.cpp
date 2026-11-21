@@ -32,7 +32,8 @@ void OpenAICompatibleProvider::configure(const PreferenceValues &values) {
   }
 
   auto apiKey = std::move(fields.apiKey);
-  if (url == m_url && apiKey == m_apiKey) return;
+  const bool extraChanged = configureExtra(values);
+  if (url == m_url && apiKey == m_apiKey && !extraChanged) return;
 
   m_url = std::move(url);
   m_apiKey = std::move(apiKey);
@@ -93,6 +94,19 @@ void OpenAICompatibleProvider::addTranscriptionFields(http::FormData &form, std:
   for (const auto word : options.vocabulary | std::views::reverse) {
     if (prompt.size() + word.size() + 2 > MAX_TRANSCRIPTION_PROMPT_BYTES) break;
     prompt.insert(0, prompt.empty() ? std::string(word) : std::format("{}, ", word));
+  }
+  // the text right before the audio comes last, which is where whisper-style models look for it
+  if (options.context && prompt.size() + 2 < MAX_TRANSCRIPTION_PROMPT_BYTES) {
+    auto context = std::string_view(*options.context);
+    const auto room = MAX_TRANSCRIPTION_PROMPT_BYTES - prompt.size() - (prompt.empty() ? 0 : 2);
+    if (context.size() > room) {
+      context.remove_prefix(context.size() - room);
+      // don't start in the middle of a UTF-8 sequence
+      while (!context.empty() && (static_cast<unsigned char>(context.front()) & 0xC0) == 0x80) {
+        context.remove_prefix(1);
+      }
+    }
+    if (!context.empty()) prompt += prompt.empty() ? std::string(context) : std::format(". {}", context);
   }
   if (!prompt.empty()) form.addField("prompt", QByteArray::fromStdString(prompt));
 }

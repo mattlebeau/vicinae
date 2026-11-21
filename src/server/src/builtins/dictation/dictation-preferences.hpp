@@ -19,6 +19,8 @@ struct DictationPreferences {
   bool sound = true;
   bool pauseMedia = true;
   Dictation::DictationAction dictationAction = Dictation::DictationAction::PasteToActiveWindow;
+  std::string livePreview = std::string(Dictation::LIVE_PREVIEW_OFF);
+  double hudScale = 1.0;
 };
 
 template <> struct PreferenceSchema<DictationPreferences> {
@@ -99,6 +101,36 @@ template <> struct PreferenceSchema<DictationPreferences> {
             options.emplace_back(option(Action::CopyToClipboard, tr("Copy to clipboard")));
             return options;
           },
+  };
+  PreferenceMeta livePreview{
+      .title = tr("Live transcription"),
+      .description = tr("Show the text in the dictation HUD while you speak. The pasted text still comes "
+                        "from the transcription model once you stop. Cloud models are billed for every "
+                        "piece of audio sent for the preview."),
+      .required = false,
+      .sections =
+          [] {
+            auto sections =
+                buildModelDropdownSections(ServiceRegistry::instance()->ai(), AI::Capability::Transcription);
+            sections.insert(sections.begin(),
+                            Preference::DropdownData::Section{.options = {
+                                                                  Preference::DropdownData::Option{
+                                                                      .title = tr("Off"),
+                                                                      .value = Dictation::qs(Dictation::LIVE_PREVIEW_OFF),
+                                                                  },
+                                                                  Preference::DropdownData::Option{
+                                                                      .title = tr("Same as transcription model"),
+                                                                      .value = Dictation::qs(Dictation::LIVE_PREVIEW_SAME),
+                                                                  },
+                                                              }});
+            return sections;
+          },
+  };
+  PreferenceMeta hudScale{
+      .title = tr("HUD size"),
+      .description = tr("Scale of the dictation HUD, from 1 (default) to 4. Decimals such as 1.5 work."),
+      .placeholder = "1.0",
+      .required = false,
   };
   Q_DECLARE_TR_FUNCTIONS(DictationPreferences)
 };

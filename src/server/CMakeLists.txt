@@ -3,7 +3,7 @@ set(CMAKE_AUTORCC ON)
 set(LIBS)
 set(TARGET vicinae-server)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Network Svg Concurrent Quick Qml GuiPrivate QuickDialogs2 QuickControls2 ShaderTools LinguistTools Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Core Network Svg Concurrent Quick Qml GuiPrivate QuickDialogs2 QuickControls2 ShaderTools LinguistTools Multimedia WebSockets)
 
 if (USE_SYSTEM_KF6)
 	find_package(KF6SyntaxHighlighting REQUIRED)
@@ -25,7 +25,7 @@ endif()
 list(APPEND LIBS
 	Qt6::Network Qt6::Svg Qt6::Concurrent Qt6::Quick Qt6::Qml
 	Qt6::GuiPrivate # for deeper integration with wayland protocols, we need wl_surface
-	Qt6::QuickDialogs2 Qt6::QuickControls2 Qt6::Multimedia
+	Qt6::QuickDialogs2 Qt6::QuickControls2 Qt6::Multimedia Qt6::WebSockets
 	${CMARK_LIBRARY} ${CMARK_EXT_LIBRARY}
 	JKQTMathText6
 	zip
@@ -658,6 +658,21 @@ set(SRCS
 
 	src/services/audio/audio-recorder.hpp
 	src/services/audio/audio-recorder.cpp
+	src/services/audio/streaming-resampler.hpp
+	src/services/audio/streaming-resampler.cpp
+	src/services/ai/live/live-transcriber.hpp
+	src/services/ai/live/live-transcriber.cpp
+	src/services/ai/live/chunk-planner.hpp
+	src/services/ai/live/chunk-planner.cpp
+	src/services/ai/live/chunked-live-transcriber.hpp
+	src/services/ai/live/chunked-live-transcriber.cpp
+	src/services/ai/live/realtime-protocol.hpp
+	src/services/ai/live/realtime-protocol.cpp
+	src/services/ai/live/realtime-live-transcriber.hpp
+	src/services/ai/live/realtime-live-transcriber.cpp
+	src/services/ai/openai/generic-openai-provider.hpp
+	src/services/ai/openai/generic-openai-provider.cpp
+	src/services/ai/transcription-model-detection.hpp
 
 	src/services/ai/ai-provider.hpp
 	src/services/ai/ai-service.hpp
@@ -1836,6 +1851,10 @@ if (BUILD_TESTS AND UNIX AND NOT APPLE)
 		tests/pactl-audio-control.cpp
 		tests/clipboard-mime.cpp
 		tests/extension-manifest.cpp
+		src/services/ai/live/chunk-planner.cpp
+		src/services/ai/live/realtime-protocol.cpp
+		src/services/audio/streaming-resampler.cpp
+		tests/dictation-live.cpp
 	)
 	target_link_libraries(${TEST_TARGET} PRIVATE vicinae::common Qt6::Concurrent glaze::glaze)
 	target_link_libraries(${TEST_TARGET} PRIVATE Catch2::Catch2WithMain Qt6::Core Qt6::Gui)

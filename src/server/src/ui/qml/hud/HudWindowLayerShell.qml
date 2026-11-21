@@ -9,7 +9,7 @@ HudWindow {
 
     // Resizing the surface every frame makes the pill's content flicker, so it animates inside a window wide
     // enough for all of its states.
-    width: dictating ? 360 : pillWidth
+    width: dictating ? dictationWindowWidth : pillWidth
 
     LayerShell.Window.layer: LayerShell.Window.LayerTop
     LayerShell.Window.scope: "vicinae-hud"

@@ -13,6 +13,8 @@
 #include "services/ai/lemonade/lemonade-provider.hpp"
 #include "services/ai/llamacpp/llamacpp-provider.hpp"
 #include "services/ai/openai/openai-compatible-provider.hpp"
+#include "services/ai/openai/generic-openai-provider.hpp"
+#include "services/ai/live/chunked-live-transcriber.hpp"
 #include "services/ai/openai/openai-provider.hpp"
 #include "services/ai/openrouter/openrouter-provider.hpp"
 #include "services/local-storage/local-storage-service.hpp"
@@ -122,8 +124,21 @@ std::unique_ptr<AbstractProvider> Service::createProvider(const std::string &id,
   if (type == "openrouter") return std::make_unique<OpenRouterProvider>(id);
   if (const auto *info = findProviderType(type); info && info->category == Category::Agent)
     return std::make_unique<AcpProvider>(id, type);
-  if (type == "openai-compatible") return std::make_unique<OpenAICompatibleProvider>(id, type, "");
+  if (type == "openai-compatible") return std::make_unique<GenericOpenAIProvider>(id);
   return nullptr;
+}
+
+std::unique_ptr<AbstractLiveTranscriber> Service::createLiveTranscriber(const ModelRef &ref,
+                                                                       LiveTranscriptionOptions opts,
+                                                                       bool allowStreaming) {
+  auto *provider = getProviderById(ref.provider);
+  if (!provider) return nullptr;
+  if (auto live = allowStreaming ? provider->createLiveTranscriber(ref.id, opts) : nullptr) {
+    qInfo() << "Live transcription: streaming with" << QString::fromStdString(ref.id);
+    return live;
+  }
+  qInfo() << "Live transcription: transcribing" << QString::fromStdString(ref.id) << "in chunks";
+  return std::make_unique<ChunkedLiveTranscriber>(*this, ref, std::move(opts));
 }
 
 } // namespace AI

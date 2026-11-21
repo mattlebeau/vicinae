@@ -1,5 +1,6 @@
 #include "dictation-service.hpp"
 #include <algorithm>
+#include <cmath>
 #include "services/ai/ai-service.hpp"
 #include "services/dictation/dictation-session.hpp"
 
@@ -11,7 +12,13 @@ DictationService::DictationService(const std::filesystem::path &dataDir, AI::Ser
       m_vocabulary(dataDir / "dictation-vocabulary.json", this),
       m_styles(dataDir / "dictation-styles.json", this) {}
 
-void DictationService::setSettings(TranscriptionSettings settings) { m_settings = std::move(settings); }
+void DictationService::setSettings(TranscriptionSettings settings) {
+  // NaN fails both comparisons of clamp, so it is replaced first
+  if (!std::isfinite(settings.hudScale)) settings.hudScale = MIN_HUD_SCALE;
+  settings.hudScale = std::clamp(settings.hudScale, MIN_HUD_SCALE, MAX_HUD_SCALE);
+  m_settings = std::move(settings);
+  emit settingsChanged();
+}
 
 std::optional<AI::ProviderModel> DictationService::selectedModel() const {
   if (!m_settings.model) return std::nullopt;
@@ -31,11 +38,26 @@ DictationService::Readiness DictationService::readiness() const {
 std::optional<TranscriptionSetup> DictationService::setup() const {
   const auto model = selectedModel();
   if (!model) return std::nullopt;
+  std::optional<AI::ModelRef> liveModel;
+  switch (m_settings.livePreview) {
+  case TranscriptionSettings::LivePreview::Off:
+    break;
+  case TranscriptionSettings::LivePreview::SameModel:
+    liveModel = model->ref;
+    break;
+  case TranscriptionSettings::LivePreview::OtherModel:
+    if (m_settings.liveModel && m_ai.isAvailable(*m_settings.liveModel, AI::Capability::Transcription)) {
+      liveModel = m_settings.liveModel;
+    }
+    break;
+  }
+
   return TranscriptionSetup{
       .model = model->ref,
       .options = {.language = m_settings.language},
       .playSoundEffects = m_settings.playSoundEffects,
       .pauseMedia = m_settings.pauseMedia,
+      .liveModel = std::move(liveModel),
   };
 }
 

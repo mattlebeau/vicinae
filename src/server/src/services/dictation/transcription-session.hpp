@@ -10,6 +10,8 @@
 #include <string_view>
 #include <vector>
 #include "services/ai/ai-provider.hpp"
+#include "services/ai/live/live-transcriber.hpp"
+#include "services/audio/streaming-resampler.hpp"
 #include "services/audio/audio-recorder.hpp"
 #include "services/media-control/media-control-service.hpp"
 
@@ -22,6 +24,8 @@ struct TranscriptionSetup {
   std::vector<std::string> extraVocabulary;
   bool playSoundEffects = true;
   bool pauseMedia = true;
+  // shows the text in the HUD while recording, transcribed with this model
+  std::optional<AI::ModelRef> liveModel;
 };
 
 struct Transcript {
@@ -41,6 +45,7 @@ signals:
   void audioLevelChanged();
   void elapsedTimeChanged();
   void stateChanged();
+  void liveTextChanged();
   void transcribed(const Transcript &transcript);
   void failed(const QString &message);
   void cancelled();
@@ -62,8 +67,15 @@ public:
   bool transcribing() const { return m_transcribing; }
   bool captureReady() const { return m_captureReady; }
 
+  bool livePreview() const { return m_setup.liveModel.has_value(); }
+  const QString &liveCommitted() const { return m_liveCommitted; }
+  const QString &liveTentative() const { return m_liveTentative; }
+
 private:
   void fail(const QString &message);
+  void startLive(bool allowStreaming);
+  void stopLive();
+  void feedLive(std::span<const float> captured);
 
   DictationService &m_dictation;
   TranscriptionSetup m_setup;
@@ -78,6 +90,13 @@ private:
   bool m_captureReady = false;
   qint64 m_durationMs = 0;
   std::unique_ptr<MediaControlService::TransientPauseHandle> m_pauseHandle;
+  std::unique_ptr<AI::AbstractLiveTranscriber> m_live;
+  std::unique_ptr<Audio::StreamingResampler> m_liveResampler;
+  // everything recorded so far at 16 kHz, so a fallback transcriber can start from the beginning
+  std::vector<float> m_liveAudio;
+  bool m_liveStreaming = false;
+  QString m_liveCommitted;
+  QString m_liveTentative;
   QSoundEffect m_startSound;
   QSoundEffect m_stopSound;
 };

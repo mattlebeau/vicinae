@@ -9,6 +9,9 @@ class OpenAIProvider : public OpenAICompatibleProvider {
 public:
   explicit OpenAIProvider(std::string id);
 
+  std::unique_ptr<AbstractLiveTranscriber> createLiveTranscriber(std::string_view modelId,
+                                                                 const LiveTranscriptionOptions &opts) override;
+
 protected:
   Capabilities capabilitiesFor(std::string_view id) const override;
   void addTranscriptionFields(http::FormData &form, std::string_view modelId,

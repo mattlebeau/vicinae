@@ -89,7 +89,16 @@ class DictationExtension : public TypedCommandRepository<DictationPreferences> {
 
   void preferencesChanged(const DictationPreferences &preferences) const override {
     TranscriptionSettings settings{.playSoundEffects = preferences.sound,
-                                   .pauseMedia = preferences.pauseMedia};
+                                   .pauseMedia = preferences.pauseMedia,
+                                   .hudScale = preferences.hudScale};
+    if (preferences.livePreview == Dictation::LIVE_PREVIEW_SAME) {
+      settings.livePreview = TranscriptionSettings::LivePreview::SameModel;
+    } else if (preferences.livePreview != Dictation::LIVE_PREVIEW_OFF) {
+      if (auto ref = AI::ModelRef::fromString(preferences.livePreview)) {
+        settings.livePreview = TranscriptionSettings::LivePreview::OtherModel;
+        settings.liveModel = std::move(*ref);
+      }
+    }
     if (preferences.model != Dictation::NO_MODEL) {
       if (auto ref = AI::ModelRef::fromString(preferences.model)) settings.model = std::move(*ref);
     }

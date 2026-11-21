@@ -1,11 +1,34 @@
+#include <QDir>
+#include <QImage>
 #include <QQuickWindow>
 #include <utility>
 #include "ui/windows/hud-bridge.hpp"
+#include "service-registry.hpp"
+#include "services/dictation/dictation-service.hpp"
 
 HudBridge::HudBridge(QObject *parent) : QObject(parent) {
   m_timer.setSingleShot(true);
   m_timer.setInterval(1500);
   connect(&m_timer, &QTimer::timeout, this, &HudBridge::hide);
+  m_captureDir = qEnvironmentVariable("VICINAE_HUD_CAPTURE_DIR");
+  if (!m_captureDir.isEmpty()) {
+    QDir().mkpath(m_captureDir);
+    m_captureTimer.setInterval(1000);
+    connect(&m_captureTimer, &QTimer::timeout, this, [this] {
+      if (!m_visible || !m_window) return;
+      const auto path = QDir(m_captureDir).filePath(QStringLiteral("hud-%1.png").arg(++m_captureCount, 4, 10, QLatin1Char('0')));
+      m_window->grabWindow().save(path);
+    });
+    m_captureTimer.start();
+  }
+  if (auto *dictation = ServiceRegistry::instance()->dictation()) {
+    connect(dictation, &DictationService::settingsChanged, this, &HudBridge::scaleChanged);
+  }
+}
+
+double HudBridge::scale() const {
+  if (auto *dictation = ServiceRegistry::instance()->dictation()) return dictation->hudScale();
+  return 1.0;
 }
 
 void HudBridge::show(const QString &title, const std::optional<ImageURL> &icon) {

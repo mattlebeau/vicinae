@@ -68,6 +68,20 @@ struct AudioCppFields {
   std::string url = "http://localhost:8080";
 };
 
+enum class RealtimeMode { Off, Beta, Ga };
+
+/**
+ * The generic OpenAI-compatible server, which may also serve speech-to-text models.
+ */
+struct GenericOpenAIFields {
+  std::string name;
+  std::string url;
+  std::string apiKey;
+  std::string transcriptionModels;
+  RealtimeMode realtime = RealtimeMode::Off;
+  std::string realtimePath;
+};
+
 enum class KeepLoaded { Immediately, OneMinute, FiveMinutes, FifteenMinutes, Always };
 enum class Device { Gpu, Cpu };
 
@@ -94,6 +108,11 @@ template <> struct glz::meta<AI::KeepLoaded> {
   using enum AI::KeepLoaded;
   static constexpr auto value = glz::enumerate("0", Immediately, "60", OneMinute, "300", FiveMinutes, "900",
                                                FifteenMinutes, "always", Always);
+};
+
+template <> struct glz::meta<AI::RealtimeMode> {
+  using enum AI::RealtimeMode;
+  static constexpr auto value = glz::enumerate("off", Off, "beta", Beta, "ga", Ga);
 };
 
 template <> struct glz::meta<AI::Device> {
@@ -175,6 +194,58 @@ template <> struct PreferenceSchema<AI::OpenAICompatibleFields> {
       .required = false,
   };
   Q_DECLARE_TR_FUNCTIONS(OpenAICompatibleFields)
+};
+
+template <> struct PreferenceSchema<AI::GenericOpenAIFields> {
+  PreferenceMeta name{
+      .title = tr("Name"),
+      .description = tr("How this server is shown in model lists."),
+      .placeholder = "My server",
+  };
+  PreferenceMeta url{
+      .title = tr("Server URL"),
+      .description =
+          tr("Base URL of the OpenAI-compatible API, including the version prefix if the server has one. "
+             "Can point to another machine on your network, such as http://192.168.1.20:8000/v1."),
+      .placeholder = "http://localhost:8080/v1",
+  };
+  PreferenceMeta apiKey{
+      .title = tr("API Key"),
+      .description = tr("Leave empty if the server does not require one."),
+      .placeholder = "sk-...",
+      .kind = PreferenceMeta::Kind::Password,
+      .required = false,
+  };
+  PreferenceMeta transcriptionModels{
+      .title = tr("Transcription models"),
+      .description = tr("Comma-separated speech-to-text models served at /audio/transcriptions. Models "
+                        "whose name looks like one (whisper, parakeet, ...) are detected on their own; list "
+                        "them here when the server has no model list or uses other names."),
+      .placeholder = "Systran/faster-whisper-large-v3, whisper-1",
+      .required = false,
+  };
+  PreferenceMeta realtime{
+      .title = tr("Live transcription"),
+      .description = tr("Stream audio over the Realtime WebSocket API for the dictation live preview. "
+                        "Speaches and most self-hosted servers use the beta protocol."),
+      .options =
+          [] {
+            using AI::RealtimeMode;
+            return std::vector<Preference::DropdownData::Option>{
+                option(RealtimeMode::Off, tr("Off, transcribe in chunks")),
+                option(RealtimeMode::Beta, tr("Realtime API (beta, Speaches)")),
+                option(RealtimeMode::Ga, tr("Realtime API (current OpenAI)")),
+            };
+          },
+  };
+  PreferenceMeta realtimePath{
+      .title = tr("Realtime path"),
+      .description = tr("Where the Realtime WebSocket lives, relative to the server URL or absolute. "
+                        "Defaults to /realtime."),
+      .placeholder = "realtime",
+      .required = false,
+  };
+  Q_DECLARE_TR_FUNCTIONS(GenericOpenAIFields)
 };
 
 namespace AI {
@@ -491,11 +562,11 @@ inline constexpr auto PROVIDER_TYPES = std::to_array<ProviderTypeInfo>({
         .type = "openai-compatible",
         .label = "OpenAI-compatible",
         .icon = BuiltinIcon::Network,
-        .description =
-            "Any server exposing the OpenAI chat completions API, such as LM Studio, vLLM or llama.cpp.",
+        .description = "Any server exposing the OpenAI API, such as LM Studio, vLLM, llama.cpp, or "
+                       "Speaches and whisper.cpp for transcription.",
         .cardinality = Cardinality::Multiple,
         .category = Category::SelfHosted,
-        .fields = +[] { return describePreferences<OpenAICompatibleFields>(); },
+        .fields = +[] { return describePreferences<GenericOpenAIFields>(); },
     },
 });
 

@@ -175,7 +175,9 @@ void Recorder::processAudioData() {
 
   const auto before = m_pcmBuffer.size();
   appendSamples(data);
-  updateLevel(std::span(std::as_const(m_pcmBuffer)).subspan(before));
+  const auto added = std::span(std::as_const(m_pcmBuffer)).subspan(before);
+  updateLevel(added);
+  if (m_observer) m_observer(added);
 }
 
 void Recorder::appendSamples(const QByteArray &data) {

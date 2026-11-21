@@ -26,6 +26,9 @@ class DictationSession : public QObject {
   Q_PROPERTY(QString message READ message NOTIFY stateChanged)
   Q_PROPERTY(bool rewriting READ rewriting NOTIFY stateChanged)
   Q_PROPERTY(bool captureReady READ captureReady NOTIFY stateChanged)
+  Q_PROPERTY(bool livePreview READ livePreview CONSTANT)
+  Q_PROPERTY(QString liveCommitted READ liveCommitted NOTIFY liveTextChanged)
+  Q_PROPERTY(QString liveTentative READ liveTentative NOTIFY liveTextChanged)
 
 public:
   Q_INVOKABLE void accept() {
@@ -37,6 +40,7 @@ signals:
   void audioLevelChanged();
   void elapsedTimeChanged();
   void stateChanged();
+  void liveTextChanged();
   // The text is about to be pasted or copied.
   void delivering();
   // Pasting wasn't possible, so the text was copied to the clipboard instead.
@@ -59,6 +63,9 @@ public:
   QString message() const { return m_message; }
   bool rewriting() const { return m_rewrite.running(); }
   bool captureReady() const { return m_session.captureReady(); }
+  bool livePreview() const { return m_session.livePreview(); }
+  QString liveCommitted() const { return m_session.liveCommitted(); }
+  QString liveTentative() const { return m_session.liveTentative(); }
 
 private:
   void finish();

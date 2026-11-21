@@ -57,6 +57,13 @@ public:
 
 protected:
   const std::string &url() const { return m_url; }
+  const std::string &apiKey() const { return m_apiKey; }
+
+  /**
+   * Settings a subclass reads on top of the common ones. True when they changed in a way that requires
+   * listing the models again.
+   */
+  virtual bool configureExtra(const PreferenceValues &) { return false; }
   http::Client &client() { return m_client; }
   virtual std::string openAIRoot(std::string_view url) const { return std::string(url); }
 

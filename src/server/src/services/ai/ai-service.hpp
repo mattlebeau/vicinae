@@ -12,6 +12,7 @@
 #include <qtmetamacros.h>
 #include "ai-preferences.hpp"
 #include "ai-provider.hpp"
+#include "services/ai/live/live-transcriber.hpp"
 #include "common/types.hpp"
 #include "services/audio/audio-recorder.hpp"
 
@@ -67,6 +68,13 @@ public:
     opts.model = ref.id;
     return provider->transcribe(std::move(recording), opts);
   }
+
+  /**
+   * A live transcriber for the model: the provider's own streaming one when it has one, otherwise one that
+   * transcribes the recording in pieces. Null when the provider is unknown.
+   */
+  std::unique_ptr<AbstractLiveTranscriber> createLiveTranscriber(const ModelRef &ref, LiveTranscriptionOptions opts,
+                                                                 bool allowStreaming = true);
 
   AbstractProvider *getProviderById(std::string_view id) {
     if (auto it = m_providers.find(std::string(id)); it != m_providers.end()) { return it->second.get(); }

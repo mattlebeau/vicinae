@@ -24,10 +24,16 @@ class ServiceRegistry;
  * What the dictation extension configured, pushed through its preference hook.
  */
 struct TranscriptionSettings {
+  enum class LivePreview : std::uint8_t { Off, SameModel, OtherModel };
+
   std::optional<AI::ModelRef> model;
   std::optional<std::string> language;
   bool playSoundEffects = true;
   bool pauseMedia = true;
+  LivePreview livePreview = LivePreview::Off;
+  // the model for LivePreview::OtherModel
+  std::optional<AI::ModelRef> liveModel;
+  double hudScale = 1.0;
 };
 
 /**
@@ -36,7 +42,13 @@ struct TranscriptionSettings {
 class DictationService : public QObject {
   Q_OBJECT
 
+signals:
+  void settingsChanged();
+
 public:
+  static constexpr double MIN_HUD_SCALE = 1.0;
+  static constexpr double MAX_HUD_SCALE = 4.0;
+
   enum class Readiness : std::uint8_t { NoModels, NotSelected, Ready };
 
   DictationService(const std::filesystem::path &dataDir, AI::Service &ai, MediaControlService &mediaControl,
@@ -49,6 +61,9 @@ public:
   MediaControlService &mediaControl() { return m_mediaControl; }
 
   void setSettings(TranscriptionSettings settings);
+  const TranscriptionSettings &settings() const { return m_settings; }
+  /** Size of the dictation HUD relative to its default, already clamped. */
+  double hudScale() const { return m_settings.hudScale; }
 
   Readiness readiness() const;
   std::optional<TranscriptionSetup> setup() const;

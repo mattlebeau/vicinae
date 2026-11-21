@@ -1,4 +1,6 @@
 #pragma once
+#include <functional>
+#include <span>
 #include <QAudioFormat>
 #include <QAudioSource>
 #include <QElapsedTimer>
@@ -57,6 +59,11 @@ public:
   // mark the recording as finished and move the data out of the recorder
   Recording finish();
 
+  /** Sees every captured chunk as it arrives, at the capture rate, mono. */
+  using CaptureObserver = std::function<void(std::span<const float>)>;
+  void setCaptureObserver(CaptureObserver observer) { m_observer = std::move(observer); }
+  int captureSampleRate() const { return m_captureFormat.sampleRate(); }
+
 private:
   void processAudioData();
   void appendSamples(const QByteArray &data);
@@ -73,6 +80,7 @@ private:
   float m_level = 0.0f;
   double m_peakDb = 0.0;
   State m_state = State::Idle;
+  CaptureObserver m_observer;
 };
 
 } // namespace Audio

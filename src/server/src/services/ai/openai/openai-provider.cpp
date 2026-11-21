@@ -1,4 +1,5 @@
 #include "openai-provider.hpp"
+#include "services/ai/live/realtime-live-transcriber.hpp"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -102,6 +103,20 @@ void OpenAIProvider::addTranscriptionFields(http::FormData &form, std::string_vi
     if (word.find_first_of("<>\r\n") != std::string_view::npos) continue;
     form.addField("keywords[]", QByteArray(word.data(), static_cast<qsizetype>(word.size())));
   }
+}
+
+std::unique_ptr<AbstractLiveTranscriber>
+OpenAIProvider::createLiveTranscriber(std::string_view modelId, const LiveTranscriptionOptions &opts) {
+  // the Realtime API transcribes with the gpt-*-transcribe family only
+  if (!modelId.contains("transcribe") || modelId.contains("diarize") || apiKey().empty()) return nullptr;
+
+  RealtimeLiveTranscriber::Endpoint endpoint{
+      .url = realtime::endpoint(QString::fromStdString(url()), realtime::Dialect::Ga, std::string(modelId)),
+      .apiKey = QString::fromStdString(apiKey()),
+      .model = std::string(modelId),
+      .dialect = realtime::Dialect::Ga,
+  };
+  return std::make_unique<RealtimeLiveTranscriber>(std::move(endpoint), opts);
 }
 
 openai::ChatRequest OpenAIProvider::makeRequest(std::string_view modelId, const Model &model,

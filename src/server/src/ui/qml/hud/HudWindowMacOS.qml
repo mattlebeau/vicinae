@@ -17,7 +17,7 @@ HudWindow {
     MacOSWindow.blurEnabled: !dictating
     MacOSWindow.material: "liquidGlass"
     MacOSWindow.appearance: Theme.isDark ? "dark" : "light"
-    MacOSWindow.cornerRadius: height / 2
+    MacOSWindow.cornerRadius: pillRadius
     MacOSWindow.borderColor: Theme.mainWindowBorder
     MacOSWindow.borderWidth: dictating ? 0 : Config.borderWidth
 
