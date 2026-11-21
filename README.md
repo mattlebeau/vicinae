@@ -17,6 +17,15 @@
   <img alt="Vicinae screenshot" src="extra/screenshot.png" />
 </div>
 
+> [!IMPORTANT]
+> **This is a fork with extended dictation** (branch `dictate-extensions`): a scalable dictation HUD, a live
+> transcript while you speak, and speech-to-text through self-hosted or cloud OpenAI-compatible servers,
+> including Realtime API streaming.
+>
+> - [Dictation extensions guide](DICTATION-EXTENSIONS.md): settings and setup.
+> - [Engineering notes](Vicinae%20Dictation%20Extensions.md): architecture, diagrams, build, test and
+>   packaging commands, and how to extend it.
+
 
 **Vicinae** (pronounced _"vee-CHEE-nay"_) is a high-performance, native command palette for your desktop.
 
