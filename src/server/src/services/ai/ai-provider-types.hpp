@@ -68,6 +68,16 @@ struct AudioCppFields {
   std::string url = "http://localhost:8080";
 };
 
+/**
+ * A speech-to-text server speaking the Wyoming protocol, such as wyoming-faster-whisper or
+ * wyoming-parakeet-on-intel-npu.
+ */
+struct WyomingFields {
+  std::string name;
+  std::string url = "tcp://localhost:10300";
+  double maxSegmentSeconds = 30.0;
+};
+
 enum class RealtimeMode { Off, Beta, Ga };
 
 /**
@@ -246,6 +256,29 @@ template <> struct PreferenceSchema<AI::GenericOpenAIFields> {
       .required = false,
   };
   Q_DECLARE_TR_FUNCTIONS(GenericOpenAIFields)
+};
+
+template <> struct PreferenceSchema<AI::WyomingFields> {
+  PreferenceMeta name{
+      .title = tr("Name"),
+      .description = tr("How this server is shown in model lists."),
+      .placeholder = "Wyoming",
+  };
+  PreferenceMeta url{
+      .title = tr("Server address"),
+      .description = tr("Where the Wyoming server listens, as tcp://host:port. Can be another machine on "
+                        "your network, such as tcp://192.168.1.20:10300."),
+      .placeholder = "tcp://localhost:10300",
+  };
+  PreferenceMeta maxSegmentSeconds{
+      .title = tr("Longest audio per request (seconds)"),
+      .description = tr("Longer recordings are split at pauses and sent in pieces. Some servers cut audio "
+                        "past a fixed length, such as Parakeet on the Intel NPU past its largest encoder "
+                        "bucket; set this to that length. 0 sends every recording whole."),
+      .placeholder = "30",
+      .required = false,
+  };
+  Q_DECLARE_TR_FUNCTIONS(WyomingFields)
 };
 
 namespace AI {
@@ -557,6 +590,16 @@ inline constexpr auto PROVIDER_TYPES = std::to_array<ProviderTypeInfo>({
         .cardinality = Cardinality::Multiple,
         .category = Category::SelfHosted,
         .fields = +[] { return describePreferences<AudioCppFields>(); },
+    },
+    {
+        .type = "wyoming",
+        .label = "Wyoming",
+        .icon = BuiltinIcon::Waveform,
+        .description = "A speech-to-text server using Home Assistant's Wyoming protocol, such as "
+                       "Parakeet on the Intel NPU or faster-whisper. Lists the models it serves.",
+        .cardinality = Cardinality::Multiple,
+        .category = Category::SelfHosted,
+        .fields = +[] { return describePreferences<WyomingFields>(); },
     },
     {
         .type = "openai-compatible",

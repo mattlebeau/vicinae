@@ -17,6 +17,7 @@
 #include "services/ai/live/chunked-live-transcriber.hpp"
 #include "services/ai/openai/openai-provider.hpp"
 #include "services/ai/openrouter/openrouter-provider.hpp"
+#include "services/ai/wyoming/wyoming-provider.hpp"
 #include "services/local-storage/local-storage-service.hpp"
 
 namespace AI {
@@ -118,6 +119,7 @@ std::unique_ptr<AbstractProvider> Service::createProvider(const std::string &id,
   if (type == "llama-cpp") return std::make_unique<LlamaCppProvider>(id);
   if (type == "lemonade") return std::make_unique<LemonadeProvider>(id);
   if (type == "audio-cpp") return std::make_unique<AudioCppProvider>(id);
+  if (type == "wyoming") return std::make_unique<WyomingProvider>(id);
   if (type == "mistral") return std::make_unique<MistralProvider>(id);
   if (type == "openai") return std::make_unique<OpenAIProvider>(id);
   if (type == "groq") return std::make_unique<GroqProvider>(id);

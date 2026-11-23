@@ -722,6 +722,10 @@ set(SRCS
 	src/services/ai/lemonade/lemonade-provider.cpp
 	src/services/ai/audiocpp/audiocpp-provider.hpp
 	src/services/ai/audiocpp/audiocpp-provider.cpp
+	src/services/ai/wyoming/wyoming-protocol.hpp
+	src/services/ai/wyoming/wyoming-protocol.cpp
+	src/services/ai/wyoming/wyoming-provider.hpp
+	src/services/ai/wyoming/wyoming-provider.cpp
 	src/services/ai/openrouter/openrouter-provider.hpp
 	src/services/ai/openrouter/openrouter-provider.cpp
 	src/services/local-model-registry/local-model-catalogue.hpp
@@ -1854,7 +1858,9 @@ if (BUILD_TESTS AND UNIX AND NOT APPLE)
 		src/services/ai/live/chunk-planner.cpp
 		src/services/ai/live/realtime-protocol.cpp
 		src/services/audio/streaming-resampler.cpp
+		src/services/ai/wyoming/wyoming-protocol.cpp
 		tests/dictation-live.cpp
+		tests/wyoming-protocol.cpp
 	)
 	target_link_libraries(${TEST_TARGET} PRIVATE vicinae::common Qt6::Concurrent glaze::glaze)
 	target_link_libraries(${TEST_TARGET} PRIVATE Catch2::Catch2WithMain Qt6::Core Qt6::Gui)

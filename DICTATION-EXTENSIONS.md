@@ -8,6 +8,7 @@ This branch (`dictate-extensions`) extends Vicinae's dictation with:
 | [Live transcript](#2-live-transcript-in-the-hud) | Shows the words in the HUD as you speak them. The final text is still produced by a full pass when you stop. |
 | [Streaming servers](#streaming-realtime-api) | Streams audio to servers that implement the OpenAI Realtime API, so the live text arrives without re-sending audio. |
 | [Other speech servers](#3-speech-servers) | Lets the OpenAI-compatible provider serve speech-to-text models: self-hosted (Speaches, whisper.cpp, LocalAI, vLLM…) on this or another machine, or a cloud endpoint. |
+| [Wyoming servers](#wyoming-provider) | A provider for Home Assistant's Wyoming speech protocol, e.g. Parakeet running on an Intel NPU. |
 
 None of this needs extra software. With the built-in local models, everything runs inside Vicinae. A speech
 server is only needed if you want transcription to run elsewhere.
@@ -124,6 +125,7 @@ transcription models, they appear in the *Transcription model* and *Live transcr
 | Cloud | **OpenAI**, **Groq**, **Mistral** (upstream): enter an API key |
 | A server you host, on this machine or another one on your network | **OpenAI-compatible** (extended on this branch) |
 | A cloud or hosted service with an OpenAI-style API not listed above | **OpenAI-compatible** with the service's URL and API key |
+| A Wyoming speech server (Home Assistant's protocol), such as Parakeet on an Intel NPU | **Wyoming** (new on this branch) |
 
 ### OpenAI-compatible provider fields
 
@@ -195,6 +197,52 @@ Provider settings: URL `http://<host>:8080/v1`, *Transcription models* set to an
 whisper.cpp has no model list and serves the one model it was started with. Leave *Live transcription* off;
 whisper.cpp has no Realtime API.
 
+### Wyoming provider
+
+[Wyoming](https://github.com/OHF-Voice/wyoming) is Home Assistant's protocol for speech services: JSON
+events over a plain TCP connection. The **Wyoming** provider asks the server which speech-to-text models it
+has (`describe`) and offers them for dictation. Each transcription opens a connection, streams the audio
+(16-bit PCM) and waits for the transcript. The live transcript uses the chunked mode.
+
+| Field | `fields` key | Purpose |
+|---|---|---|
+| Name | `name` | Label shown for this server in model lists. |
+| Server address | `url` | `tcp://host:port`, default `tcp://localhost:10300`. A bare `host:port` works too. |
+| Longest audio per request (seconds) | `maxSegmentSeconds` | Longer recordings are split at the quietest moment near the limit and sent piece by piece; the texts are joined. Some servers cut audio past a fixed length (Parakeet on the NPU stops at its largest encoder bucket), so set this to that length. `0` sends recordings whole. Default `30`. |
+
+If the server can't be reached, the provider retries in the background (15 s, doubling up to 5 min) and
+the provider settings show the error. Requests time out after 3 minutes, enough for a server that compiles
+an encoder on first use.
+
+#### Parakeet on the Intel NPU
+
+[wyoming-parakeet-on-intel-npu](https://github.com/cibernox/wyoming-parakeet-on-intel-npu) runs NVIDIA's
+Parakeet TDT 0.6B v3 (25 European languages) through OpenVINO on the "AI Boost" NPU of Intel Core Ultra
+CPUs (Meteor Lake, Arrow Lake, Lunar Lake). It leaves the GPU free and uses little power. Needs the
+`intel_vpu` kernel driver (`/dev/accel/accel0`); the image ships the NPU userspace driver.
+
+```sh
+docker run -d --name parakeet-npu --device /dev/accel/accel0 \
+  -e LANGUAGE=en -e ENCODER_BUCKETS=5,10,20 -e ENCODER_LAZY_BUCKETS=30 \
+  -p 127.0.0.1:10300:10300 -v parakeet-npu-data:/data --memory 12g \
+  --restart unless-stopped ghcr.io/cibernox/wyoming-parakeet-on-intel-npu:latest
+```
+
+The encoder is compiled for fixed audio lengths ("buckets", in seconds); each request uses the smallest one
+that fits, and audio longer than the largest is truncated by the server. Set the provider's
+*Longest audio per request* to the largest bucket (30 above). The first start downloads ~3.2 GB and compiles
+the eager buckets (2–3 min); lazy buckets compile on first use (~25 s), then everything is cached in the volume.
+
+```json
+"parakeet": {
+  "type": "wyoming",
+  "fields": { "name": "Parakeet NPU", "url": "tcp://127.0.0.1:10300", "maxSegmentSeconds": 30 }
+}
+```
+
+The model is then `parakeet:nemo-parakeet-tdt-0.6b-v3`. Measured on a Core Ultra 7 265K: 3 s of speech in
+~160 ms, 16 s in ~0.4 s, 52 s (two pieces) in ~1.1 s. Parakeet ignores the vocabulary and context prompts.
+
 ---
 
 ## Troubleshooting and debugging
@@ -204,6 +252,8 @@ whisper.cpp has no Realtime API.
 | A server's models don't appear in the dictation dropdowns | The URL includes `/v1` (or the server's prefix); list the model under *Transcription models*. |
 | Live panel stays on *Listening…* | The preview model is available; with a remote server, look for `Live transcription:` lines in the log. |
 | Streaming never works and the preview arrives in chunks | That's the fallback. For Speaches, check `LOOPBACK_HOST_URL`; otherwise try the other Realtime protocol or the *Realtime path*. |
+| Wyoming models don't appear | `nc -z <host> 10300`; the provider settings show the connection error. For the NPU image, `docker logs parakeet-npu` must list `NPU` among the OpenVINO devices. |
+| Long Wyoming dictations lose their end | *Longest audio per request* is above the server's largest bucket; lower it. |
 | Final text differs from the preview | Expected: the final pass re-transcribes the whole recording with full context. |
 
 Debug aids:
