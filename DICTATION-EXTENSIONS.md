@@ -223,7 +223,7 @@ CPUs (Meteor Lake, Arrow Lake, Lunar Lake). It leaves the GPU free and uses litt
 
 ```sh
 docker run -d --name parakeet-npu --device /dev/accel/accel0 \
-  -e LANGUAGE=en -e ENCODER_BUCKETS=5,10,20 -e ENCODER_LAZY_BUCKETS=30 \
+  -e LANGUAGE=en -e ENCODER_BUCKETS=5,10,20,30 -e ENCODER_LAZY_BUCKETS= \
   -p 127.0.0.1:10300:10300 -v parakeet-npu-data:/data --memory 12g \
   --restart unless-stopped ghcr.io/cibernox/wyoming-parakeet-on-intel-npu:latest
 ```
@@ -231,7 +231,8 @@ docker run -d --name parakeet-npu --device /dev/accel/accel0 \
 The encoder is compiled for fixed audio lengths ("buckets", in seconds); each request uses the smallest one
 that fits, and audio longer than the largest is truncated by the server. Set the provider's
 *Longest audio per request* to the largest bucket (30 above). The first start downloads ~3.2 GB and compiles
-the eager buckets (2–3 min); lazy buckets compile on first use (~25 s), then everything is cached in the volume.
+the buckets (2–3 min); the blobs are cached in the volume, so later starts take ~10 s. Keep all buckets eager:
+a lazy bucket compiles during the first dictation that needs it (~25 s once, then ~1.3 s after each restart).
 
 ```json
 "parakeet": {
