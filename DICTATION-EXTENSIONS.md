@@ -64,6 +64,8 @@ When `livePreview` is not `off`, the HUD widens and gets a three-line text panel
 
 * **Full-color text** is settled and won't change.
 * **Dimmed text** is the current phrase and may still be corrected as you keep talking.
+* New words **fade in** over about half a second instead of popping up, and dimmed words brighten gently
+  when they settle. Words the model only confirms again keep their state; corrected words fade in anew.
 * *Listening…* is shown until the first words arrive, and *Transcribing…* while the final pass runs. The
   panel scrolls to keep the newest text visible.
 
@@ -268,6 +270,7 @@ don't show the NPU.
 
 Debug aids:
 
-* `VICINAE_HUD_CAPTURE_DIR=/some/dir` saves a PNG of the HUD every second while it is visible.
+* `VICINAE_HUD_CAPTURE_DIR=/some/dir` saves a PNG of the HUD every second while it is visible;
+  `VICINAE_HUD_CAPTURE_MS=100` captures more often, e.g. to check animations.
 * `VICINAE_DICTATION_DUMP_DIR=/some/dir` (upstream) saves each recording as WAV.
 * The log (`~/.local/state/vicinae/vicinae.log`) has `Live transcription:` and `Dictation:` lines.

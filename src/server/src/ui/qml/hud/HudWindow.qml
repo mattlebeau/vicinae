@@ -356,20 +356,133 @@ Window {
                 }
             }
 
+            // Words fade in as they are recognized, and tentative (dimmed) words brighten gently when they
+            // settle. Each word's opacity lives in its text color, so the layout and wrapping never move.
             Text {
                 id: liveText
                 readonly property string committed: root.live ? Hud.dictation.liveCommitted : ""
                 readonly property string tentative: root.live ? Hud.dictation.liveTentative : ""
                 readonly property bool empty: committed === "" && tentative === ""
+                // long enough to read as a soft arrival rather than a blink
+                readonly property int fadeMs: 550
+                readonly property real tentativeLevel: 0.6
+                // {text, settled, born, settledAt}; times in ms since the epoch
+                property var words: []
+                property string rendered: ""
+                property bool animating: false
 
                 width: liveArea.width
                 wrapMode: Text.Wrap
                 textFormat: Text.StyledText
                 color: Theme.foreground
                 font: liveMetrics.font
-                text: empty ? "<font color=\"" + root.mutedColor + "\">" + (root.working ? qsTr("Transcribing…") : qsTr("Listening…")) + "</font>" : root.escapeHtml(committed) + (committed !== "" && tentative !== "" ? " " : "") + "<font color=\"" + root.mutedColor + "\">" + root.escapeHtml(tentative) + "</font>"
+                text: empty ? "<font color=\"" + root.mutedColor + "\">" + (root.working ? qsTr("Transcribing…") : qsTr("Listening…")) + "</font>" : rendered
                 Accessible.role: Accessible.StaticText
                 Accessible.name: committed + " " + tentative
+
+                onCommittedChanged: Qt.callLater(syncWords)
+                onTentativeChanged: Qt.callLater(syncWords)
+
+                function splitWords(text, settled) {
+                    return text.split(/\s+/).filter(w => w.length > 0).map(w => ({
+                                text: w,
+                                settled: settled
+                            }));
+                }
+
+                // A word the model only re-punctuated or re-capitalized is the same word.
+                function sameWord(a, b) {
+                    const norm = w => w.toLowerCase().replace(/[.,!?;:"“”‘’()\[\]…]/g, "");
+                    return a.text === b.text || norm(a.text) === norm(b.text);
+                }
+
+                function inherit(next, prev, now) {
+                    next.born = prev.born;
+                    next.settledAt = next.settled && !prev.settled ? now : prev.settledAt;
+                }
+
+                // Matches the new words to the shown ones (shared prefix, then a longest common subsequence),
+                // so only words that are new or were corrected fade in.
+                function syncWords() {
+                    const now = Date.now();
+                    const next = splitWords(committed, true).concat(splitWords(tentative, false));
+                    const prev = words;
+
+                    let p = 0;
+                    while (p < prev.length && p < next.length && sameWord(prev[p], next[p])) {
+                        inherit(next[p], prev[p], now);
+                        ++p;
+                    }
+
+                    const a = prev.slice(p);
+                    const b = next.slice(p);
+                    const n = a.length;
+                    const m = b.length;
+                    if (n > 0 && m > 0 && n * m <= 250000) {
+                        const w = m + 1;
+                        const dp = new Int32Array((n + 1) * w);
+                        for (let i = n - 1; i >= 0; --i) {
+                            for (let j = m - 1; j >= 0; --j) {
+                                dp[i * w + j] = sameWord(a[i], b[j]) ? dp[(i + 1) * w + j + 1] + 1 : Math.max(dp[(i + 1) * w + j], dp[i * w + j + 1]);
+                            }
+                        }
+                        let i = 0;
+                        let j = 0;
+                        while (i < n && j < m) {
+                            if (sameWord(a[i], b[j])) {
+                                inherit(b[j], a[i], now);
+                                ++i;
+                                ++j;
+                            } else if (dp[(i + 1) * w + j] >= dp[i * w + j + 1]) {
+                                ++i;
+                            } else {
+                                ++j;
+                            }
+                        }
+                    }
+
+                    for (const word of next) {
+                        if (word.born === undefined) {
+                            word.born = now;
+                            word.settledAt = word.settled ? now : undefined;
+                        }
+                    }
+                    words = next;
+                    render(now);
+                }
+
+                // gentle at both ends
+                function ease(t) {
+                    return t >= 1 ? 1 : (1 - Math.cos(Math.PI * Math.max(0, t))) / 2;
+                }
+
+                function render(now) {
+                    const fg = Theme.foreground;
+                    let html = "";
+                    let busy = false;
+                    for (let i = 0; i < words.length; ++i) {
+                        const word = words[i];
+                        const shown = ease((now - word.born) / fadeMs);
+                        let level = tentativeLevel;
+                        if (word.settled) {
+                            const settling = word.settledAt === undefined ? 1 : ease((now - word.settledAt) / fadeMs);
+                            level = tentativeLevel + (1 - tentativeLevel) * settling;
+                            busy = busy || settling < 1;
+                        }
+                        busy = busy || shown < 1;
+                        const color = Qt.rgba(fg.r, fg.g, fg.b, shown * level);
+                        html += (i > 0 ? " " : "") + "<font color=\"" + color + "\">" + root.escapeHtml(word.text) + "</font>";
+                    }
+                    rendered = html;
+                    animating = busy;
+                }
+
+                Timer {
+                    interval: 16
+                    repeat: true
+                    running: liveText.animating && root.visible
+                    onTriggered: liveText.render(Date.now())
+                }
             }
         }
     }

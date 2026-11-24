@@ -13,7 +13,9 @@ HudBridge::HudBridge(QObject *parent) : QObject(parent) {
   m_captureDir = qEnvironmentVariable("VICINAE_HUD_CAPTURE_DIR");
   if (!m_captureDir.isEmpty()) {
     QDir().mkpath(m_captureDir);
-    m_captureTimer.setInterval(1000);
+    bool ok = false;
+    const int intervalMs = qEnvironmentVariableIntValue("VICINAE_HUD_CAPTURE_MS", &ok);
+    m_captureTimer.setInterval(ok && intervalMs >= 20 ? intervalMs : 1000);
     connect(&m_captureTimer, &QTimer::timeout, this, [this] {
       if (!m_visible || !m_window) return;
       const auto path = QDir(m_captureDir).filePath(QStringLiteral("hud-%1.png").arg(++m_captureCount, 4, 10, QLatin1Char('0')));
