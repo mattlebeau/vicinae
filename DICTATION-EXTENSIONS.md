@@ -221,6 +221,11 @@ Parakeet TDT 0.6B v3 (25 European languages) through OpenVINO on the "AI Boost" 
 CPUs (Meteor Lake, Arrow Lake, Lunar Lake). It leaves the GPU free and uses little power. Needs the
 `intel_vpu` kernel driver (`/dev/accel/accel0`); the image ships the NPU userspace driver.
 
+The easiest way is [`scripts/setup-parakeet-npu.sh`](scripts/setup-parakeet-npu.sh): it checks the NPU
+driver, firmware and Docker, starts the container below, waits until it is ready and transcribes a test
+phrase (`--status`, `--test`, `--recreate`, `--uninstall [--purge]`; settings via `PARAKEET_*` variables, see
+its header). By hand:
+
 ```sh
 docker run -d --name parakeet-npu --device /dev/accel/accel0 \
   -e LANGUAGE=en -e ENCODER_BUCKETS=5,10,20,30 -e ENCODER_LAZY_BUCKETS= \
@@ -243,6 +248,10 @@ a lazy bucket compiles during the first dictation that needs it (~25 s once, the
 
 The model is then `parakeet:nemo-parakeet-tdt-0.6b-v3`. Measured on a Core Ultra 7 265K: 3 s of speech in
 ~160 ms, 16 s in ~0.4 s, 52 s (two pieces) in ~1.1 s. Parakeet ignores the vocabulary and context prompts.
+
+To watch the NPU work, run [`scripts/npu-top`](scripts/npu-top) (no root needed): live utilization with a
+history graph, clock and allocated memory, from the `intel_vpu` sysfs counters. nvtop and Mission Center
+don't show the NPU.
 
 ---
 

@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""npu-top — live Intel NPU usage from the intel_vpu sysfs counters (no root needed).
+
+Usage: npu-top [interval_seconds]   (default 0.5; Ctrl+C to quit)
+
+Utilization = change in npu_busy_time_us / elapsed time. Also shows the clock and the
+memory the NPU has allocated (compiled models), plus a history graph.
+"""
+import glob
+import os
+import shutil
+import sys
+import time
+
+BARS = " ▁▂▃▄▅▆▇█"
+
+
+def find_device():
+    for path in sorted(glob.glob("/sys/class/accel/accel*/device")):
+        if os.path.exists(os.path.join(path, "npu_busy_time_us")):
+            return path
+    sys.exit("No Intel NPU with busy-time counters found (needs the intel_vpu driver, Linux 6.11+).")
+
+
+def read(dev, name, default=0):
+    try:
+        with open(os.path.join(dev, name)) as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        return default
+
+
+def bar(fraction, width):
+    filled = round(max(0.0, min(1.0, fraction)) * width)
+    return "█" * filled + "░" * (width - filled)
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print(__doc__.strip())
+        return
+    try:
+        interval = float(sys.argv[1]) if len(sys.argv) > 1 else 0.5
+    except ValueError:
+        sys.exit(f"usage: npu-top [interval_seconds], got {sys.argv[1]!r}")
+    dev = find_device()
+    history = []
+    busy_total_start = read(dev, "npu_busy_time_us")
+    prev_busy, prev_t = busy_total_start, time.monotonic()
+    started = prev_t
+    peak = 0.0
+    print("\033[?25l", end="")  # hide cursor
+    try:
+        while True:
+            time.sleep(interval)
+            busy, now = read(dev, "npu_busy_time_us"), time.monotonic()
+            util = min(1.0, (busy - prev_busy) / 1e6 / (now - prev_t)) if now > prev_t else 0.0
+            prev_busy, prev_t = busy, now
+            peak = max(peak, util)
+
+            cols = shutil.get_terminal_size((80, 24)).columns
+            width = max(10, cols - 22)
+            history.append(util)
+            del history[:-width]
+
+            freq = read(dev, "npu_current_frequency_mhz")
+            fmax = read(dev, "npu_max_frequency_mhz") or 1
+            mem = read(dev, "npu_memory_utilization")
+            busy_s = (busy - busy_total_start) / 1e6
+            graph = "".join(BARS[min(8, round(u * 8))] for u in history)
+
+            lines = [
+                f"Intel NPU  ({os.path.realpath(dev).split('/')[-1]})   interval {interval}s   Ctrl+C to quit",
+                "",
+                f"Utilization {util * 100:5.1f}%  {bar(util, width)}",
+                f"Frequency  {freq:5d} MHz {bar(freq / fmax, width)}  (max {fmax})",
+                f"Memory     {mem / 2**30:6.2f} GiB  allocated by the NPU (compiled models)",
+                f"Busy time  {busy_s:8.2f} s since start ({busy_s / max(1e-9, now - started) * 100:.1f}% avg), peak {peak * 100:.0f}%",
+                "",
+                "History",
+                graph.rjust(width),
+            ]
+            print("\033[H\033[J" + "\n".join(lines), flush=True)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        print("\033[?25h")  # show cursor
+
+
+if __name__ == "__main__":
+    main()
